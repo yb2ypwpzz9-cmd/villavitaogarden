@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -255,8 +256,9 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <nav class="hidden md:flex items-center gap-8" aria-label="Navegación principal">
       <a href="#galeria"      class="nav-link text-white/85 text-sm font-medium hover:text-white cursor-pointer">Galería</a>
       <a href="#habitaciones" class="nav-link text-white/85 text-sm font-medium hover:text-white cursor-pointer">Habitaciones</a>
-      <a href="#ubicacion"    class="nav-link text-white/85 text-sm font-medium hover:text-white cursor-pointer">Ubicación</a>
-      <a href="#reservar"     class="nav-link text-white/85 text-sm font-medium hover:text-white cursor-pointer">Reservar</a>
+      <a href="#ubicacion"      class="nav-link text-white/85 text-sm font-medium hover:text-white cursor-pointer">Ubicación</a>
+      <a href="#disponibilidad" class="nav-link text-white/85 text-sm font-medium hover:text-white cursor-pointer">Disponibilidad</a>
+      <a href="#reservar"       class="nav-link text-white/85 text-sm font-medium hover:text-white cursor-pointer">Reservar</a>
     </nav>
 
     <div class="hidden md:flex items-center gap-4">
@@ -967,6 +969,41 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
 
 <!-- ════════════════════════════════════
+     CALENDARIO DISPONIBILIDAD
+════════════════════════════════════ -->
+<section class="bg-slate-50 py-14 px-6" id="disponibilidad">
+  <div class="max-w-2xl mx-auto reveal">
+    <h2 class="font-serif font-bold text-slate-900 text-2xl mb-6 text-center">Calendario de Reservas</h2>
+
+    <!-- Legend -->
+    <div class="flex items-center justify-center gap-5 mb-6 text-xs text-slate-500">
+      <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-teal-400 inline-block"></span> Disponible</span>
+      <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-red-400 inline-block"></span> Ocupado</span>
+      <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-slate-200 inline-block"></span> Pasado</span>
+    </div>
+
+    <!-- Nav -->
+    <div class="flex items-center justify-between mb-4 px-1">
+      <button id="cal-prev" class="p-1.5 rounded-lg hover:bg-slate-200 transition-colors cursor-pointer" aria-label="Mes anterior">
+        <svg class="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+      </button>
+      <span id="cal-title" class="text-sm font-semibold text-slate-700"></span>
+      <button id="cal-next" class="p-1.5 rounded-lg hover:bg-slate-200 transition-colors cursor-pointer" aria-label="Mes siguiente">
+        <svg class="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+      </button>
+    </div>
+
+    <!-- Calendar grid -->
+    <div id="calendar-container">
+      <div class="flex items-center justify-center py-12 text-slate-400 text-sm">
+        <svg class="animate-spin w-4 h-4 mr-2 text-teal-500" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+        Cargando…
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════
      FORMULARIO RESERVA
 ════════════════════════════════════ -->
 <section class="bg-white py-20 md:py-28 px-6" id="reservar">
@@ -1269,6 +1306,86 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
   document.querySelector('form').addEventListener('submit', () => {
     gtag('event', 'envio_formulario', { event_category: 'conversión', event_label: 'Formulario Reserva' });
   });
+
+  // ── Calendario de disponibilidad ──────────────────────────────────
+  (async function initCalendar() {
+    const container = document.getElementById('calendar-container');
+    const titleEl  = document.getElementById('cal-title');
+    const today = new Date();
+    today.setHours(0,0,0,0);
+
+    let blocked = [];
+    try {
+      const res = await fetch('/.netlify/functions/calendar');
+      const data = await res.json();
+      blocked = data.blocked || [];
+    } catch(e) {
+      console.warn('Calendar fetch failed', e);
+    }
+
+    const blockedSet = new Set(blocked);
+    const monthNames = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    const dayNames = ['Lu','Ma','Mi','Ju','Vi','Sá','Do'];
+
+    let curYear = today.getFullYear();
+    let curMonth = today.getMonth();
+
+    function pad(n) { return String(n).padStart(2,'0'); }
+
+    function renderMonth(year, month) {
+      const firstDay = new Date(year, month, 1);
+      const lastDay = new Date(year, month + 1, 0);
+      let startDow = firstDay.getDay();
+      startDow = startDow === 0 ? 6 : startDow - 1;
+
+      let html = `<div class="bg-white rounded-2xl border border-slate-100 p-4">`;
+      html += `<div class="grid grid-cols-7 gap-0.5 mb-1">`;
+      dayNames.forEach(d => {
+        html += `<div class="text-center text-slate-400 text-xs font-semibold py-1">${d}</div>`;
+      });
+      html += `</div><div class="grid grid-cols-7 gap-0.5">`;
+
+      for (let i = 0; i < startDow; i++) html += `<div></div>`;
+
+      for (let day = 1; day <= lastDay.getDate(); day++) {
+        const dateStr = `${year}-${pad(month+1)}-${pad(day)}`;
+        const cellDate = new Date(year, month, day);
+        const isPast = cellDate < today;
+        const isBlocked = blockedSet.has(dateStr);
+        const isToday = cellDate.getTime() === today.getTime();
+
+        let cls = 'aspect-square flex items-center justify-center rounded text-xs font-medium ';
+        if (isPast)        cls += 'bg-slate-100 text-slate-300 cursor-default';
+        else if (isBlocked) cls += 'bg-red-400 text-white cursor-not-allowed';
+        else               cls += 'bg-teal-50 text-teal-700 hover:bg-teal-500 hover:text-white cursor-pointer transition-colors duration-150';
+        if (isToday) cls += ' ring-2 ring-teal-500 ring-offset-1';
+
+        html += `<div class="${cls}">${day}</div>`;
+      }
+
+      html += `</div></div>`;
+      return html;
+    }
+
+    function draw() {
+      titleEl.textContent = `${monthNames[curMonth]} ${curYear}`;
+      container.innerHTML = renderMonth(curYear, curMonth);
+    }
+
+    document.getElementById('cal-prev').addEventListener('click', () => {
+      curMonth--;
+      if (curMonth < 0) { curMonth = 11; curYear--; }
+      draw();
+    });
+
+    document.getElementById('cal-next').addEventListener('click', () => {
+      curMonth++;
+      if (curMonth > 11) { curMonth = 0; curYear++; }
+      draw();
+    });
+
+    draw();
+  })();
 </script>
 
 </body>
